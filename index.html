@@ -117,6 +117,8 @@
         grid-template-columns: 3fr 1fr 1fr;
         column-gap: 12px;
       }
+      #grid-header a { text-underline-offset: 2px; }
+      #text-content a { text-underline-offset: 3px; }
       #text-section {
         padding-left: 20px;
         width: calc(100vw - 40px);
@@ -169,7 +171,8 @@
 
 <script>
 // ─── Config ───────────────────────────────────────────────────────────────────
-const MAX_N      = 150000;
+const IS_MOBILE  = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+const MAX_N      = IS_MOBILE ? 60000 : 150000;
 const SPRING     = 0.08;
 const DAMP       = 0.84;
 const PARALLAX   = 0.055;
@@ -369,7 +372,8 @@ async function setup() {
     sMx = iMx = W * 0.5;
     sMy = iMy = H * 0.5;
     // Sample at native aspect ratio so pixels aren't distorted
-    const sS = 2000;
+    // Smaller sampling canvas on mobile — faster init, fewer pool candidates needed
+    const sS = IS_MOBILE ? 1200 : 2000;
     const sAspect = img.naturalWidth / img.naturalHeight;
     const sW = sS, sH = Math.round(sS / sAspect);
     const tmp = Object.assign(document.createElement('canvas'), { width: sW, height: sH });
@@ -584,12 +588,26 @@ window.addEventListener('mousemove', e => {
   _mouseMovedAt = performance.now();
 });
 
-// Cache scrollY via passive listener — avoids layout read inside rAF
+// Cache scrollY via passive listener — avoids layout read inside rAF.
+// On mobile, rAF is paused during momentum scrolling (iOS Safari).
+// We force an update+render from the scroll listener to prevent the
+// canvas going black or getting stuck mid-transition.
+let _lastScrollRender = 0;
 window.addEventListener('scroll', () => {
   _cachedScrollY = window.scrollY;
   _scrolling = true;
   clearTimeout(_scrollTimer);
   _scrollTimer = setTimeout(() => { _scrolling = false; }, 150);
+
+  // Force render on mobile when rAF may be throttled — cap at ~24fps
+  if (IS_MOBILE && count > 0) {
+    const now = performance.now();
+    if (now - _lastScrollRender > 42) {
+      _lastScrollRender = now;
+      update(now);
+      render();
+    }
+  }
 }, { passive: true });
 
 let resizeTimer;
