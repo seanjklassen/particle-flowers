@@ -271,7 +271,7 @@ function sample(imgPixels, srcW, srcH) {
   const offX = (W - srcW * coverScale) / 2;
   const offY = (H - srcH * coverScale) / 2;
   const basePr   = 0.82;
-  const MAX_POOL = MAX_N * 3;
+  const MAX_POOL = Math.max(MAX_N * 3, 450000);
   const pX = new Uint16Array(MAX_POOL); const pY = new Uint16Array(MAX_POOL);
   const pR = new Uint8Array(MAX_POOL);  const pG = new Uint8Array(MAX_POOL);
   const pB = new Uint8Array(MAX_POOL);  const pL = new Uint8Array(MAX_POOL);
