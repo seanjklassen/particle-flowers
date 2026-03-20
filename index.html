@@ -31,7 +31,7 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { background: #0a0909; }
     #c { display: block; position: fixed; top: 0; left: 0; z-index: 1; }
-    #trail { display: block; position: fixed; top: 0; left: 0; z-index: 2; pointer-events: none; }
+    #trail { display: block; position: absolute; top: 0; left: 0; z-index: 2; pointer-events: none; }
 
     /* Spacer: pushes the page tall enough for the particle scatter, then text follows */
     #spacer { height: 96vh; }
@@ -678,13 +678,15 @@ if (!IS_MOBILE) {
 
   function sizeTrail() {
     trailCanvas.width = window.innerWidth;
-    trailCanvas.height = window.innerHeight;
+    // Cover the full scrollable document, not just the viewport
+    trailCanvas.height = Math.max(document.documentElement.scrollHeight, window.innerHeight);
   }
   sizeTrail();
   window.addEventListener('resize', sizeTrail);
 
   window.addEventListener('mousemove', e => {
-    trail.push({ x: e.clientX, y: e.clientY, t: performance.now() });
+    // Store page coordinates so the trail scrolls with the document
+    trail.push({ x: e.clientX, y: e.clientY + window.scrollY, t: performance.now() });
   });
 
   function drawTrail() {
@@ -699,6 +701,10 @@ if (!IS_MOBILE) {
       trailRaf = requestAnimationFrame(drawTrail);
       return;
     }
+
+    tCtx.lineWidth = 3;
+    tCtx.lineCap = 'round';
+    tCtx.lineJoin = 'round';
 
     for (let i = 1; i < trail.length; i++) {
       const p0 = trail[i - 1];
@@ -715,7 +721,6 @@ if (!IS_MOBILE) {
       tCtx.moveTo(p0.x, p0.y);
       tCtx.lineTo(p1.x, p1.y);
       tCtx.strokeStyle = `rgba(${TRAIL_COLOR[0]},${TRAIL_COLOR[1]},${TRAIL_COLOR[2]},${alpha.toFixed(3)})`;
-      tCtx.lineWidth = 1;
       tCtx.stroke();
     }
 
