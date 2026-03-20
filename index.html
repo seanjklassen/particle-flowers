@@ -671,9 +671,11 @@ setup();
 if (!IS_MOBILE) {
   const trailCanvas = document.getElementById('trail');
   const tCtx = trailCanvas.getContext('2d');
-  const TRAIL_FADE = 2000;    // ms to fully fade
-  const TRAIL_BANDS = 8;      // group segments into opacity bands to avoid overlap dots
-  const trail = [];            // {x, y, t}
+  const TRAIL_HOLD = 1000;    // ms at full opacity
+  const TRAIL_OUT  = 500;     // ms to fade out after hold
+  const TRAIL_LIFE = TRAIL_HOLD + TRAIL_OUT;
+  const TRAIL_BANDS = 6;
+  const trail = [];            // {x, y, t, jx, jy}
   let trailRaf;
 
   function sizeTrail() {
@@ -683,14 +685,26 @@ if (!IS_MOBILE) {
   sizeTrail();
   window.addEventListener('resize', sizeTrail);
 
+  // Seed each point with a small random offset for organic wobble
   window.addEventListener('mousemove', e => {
-    trail.push({ x: e.clientX, y: e.clientY + window.scrollY, t: performance.now() });
+    trail.push({
+      x: e.clientX, y: e.clientY + window.scrollY, t: performance.now(),
+      jx: (Math.random() - 0.5) * 1.8,
+      jy: (Math.random() - 0.5) * 1.8
+    });
   });
+
+  // Alpha curve: full opacity for TRAIL_HOLD, then linear fade over TRAIL_OUT
+  function trailAlpha(age) {
+    if (age < TRAIL_HOLD) return 1;
+    const f = (age - TRAIL_HOLD) / TRAIL_OUT;
+    return f >= 1 ? 0 : 1 - f;
+  }
 
   function drawTrail() {
     const now = performance.now();
 
-    while (trail.length && now - trail[0].t > TRAIL_FADE) trail.shift();
+    while (trail.length && now - trail[0].t > TRAIL_LIFE) trail.shift();
 
     tCtx.clearRect(0, 0, trailCanvas.width, trailCanvas.height);
 
@@ -699,16 +713,15 @@ if (!IS_MOBILE) {
       return;
     }
 
-    tCtx.lineWidth = 3;
     tCtx.lineCap = 'round';
     tCtx.lineJoin = 'round';
 
-    // Group segments into opacity bands and draw each as a single continuous
-    // path — this prevents alpha compounding at segment overlaps (the dots).
+    // Band-based rendering: group by opacity to avoid overlap artifacts.
     for (let b = 0; b < TRAIL_BANDS; b++) {
       const bandLo = b / TRAIL_BANDS;
       const bandHi = (b + 1) / TRAIL_BANDS;
-      const bandAlpha = 1 - (bandLo + bandHi) * 0.5; // midpoint opacity
+      // Map bands to alpha via the hold+fade curve
+      const bandAlpha = trailAlpha((bandLo + bandHi) * 0.5 * TRAIL_LIFE);
       if (bandAlpha <= 0) continue;
 
       tCtx.beginPath();
@@ -718,16 +731,22 @@ if (!IS_MOBILE) {
         const p0 = trail[i - 1];
         const p1 = trail[i];
         const age = now - p1.t;
-        const frac = age / TRAIL_FADE; // 0 = newest, 1 = oldest
+        const frac = age / TRAIL_LIFE;
         if (frac < bandLo || frac >= bandHi) { drawing = false; continue; }
 
         const dx = p1.x - p0.x, dy = p1.y - p0.y;
         if (dx * dx + dy * dy > 40000) { drawing = false; continue; }
 
-        if (!drawing) { tCtx.moveTo(p0.x, p0.y); drawing = true; }
-        tCtx.lineTo(p1.x, p1.y);
+        // Quadratic curve through midpoints for organic smoothness
+        const x0 = p0.x + p0.jx, y0 = p0.y + p0.jy;
+        const x1 = p1.x + p1.jx, y1 = p1.y + p1.jy;
+        if (!drawing) { tCtx.moveTo(x0, y0); drawing = true; }
+        const mx = (x0 + x1) * 0.5, my = (y0 + y1) * 0.5;
+        tCtx.quadraticCurveTo(x0, y0, mx, my);
       }
 
+      // Vary line width slightly per band for a hand-drawn feel
+      tCtx.lineWidth = 2.5 + (b % 3) * 0.4;
       tCtx.strokeStyle = `rgba(216,158,158,${bandAlpha.toFixed(3)})`;
       tCtx.stroke();
     }
