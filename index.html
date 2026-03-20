@@ -419,20 +419,13 @@ function update(t) {
   curPXo = clampedPX * breathScale * introFade;
   curPYo = clampedPY * breathScale * introFade;
 
-  // ── Smooth height lerp for mobile address bar changes ─────────────────────
-  if (_resizing && Math.abs(H - _targetH) > 1) {
-    const oldH = H;
-    H += (_targetH - H) * 0.12;
-    if (Math.abs(H - _targetH) < 1) H = _targetH;
-    const scaleY = H / oldH;
-    canvasEl.height = H | 0;
+  // ── Mobile address bar height change ────────────────────────────────────────
+  // Just update H and rebuild pixel buffers — don't rescale particle positions.
+  // The ~70px difference is imperceptible and avoids compounding scale errors.
+  if (_resizing) {
+    H = _targetH;
+    canvasEl.height = H;
     initBuffers();
-    for (let i = 0; i < count; i++) {
-      hy[i] *= scaleY;
-      py[i] *= scaleY;
-      scatterOffY[i] *= scaleY;
-    }
-  } else if (_resizing) {
     _resizing = false;
   }
 
@@ -650,7 +643,7 @@ window.addEventListener('scroll', () => {
 
 let resizeTimer;
 let _prevW = 0; // track width to distinguish real resize from mobile address bar
-let _targetH = 0; // lerp target for smooth height transitions
+let _targetH = 0; // target height for mobile address bar changes
 let _resizing = false;
 window.addEventListener('resize', () => {
   clearTimeout(resizeTimer);
@@ -659,7 +652,7 @@ window.addEventListener('resize', () => {
     const newH = window.innerHeight;
     if (newW === _prevW && count > 0) {
       // Height-only change (mobile address bar show/hide) —
-      // set target height and lerp toward it in the update loop.
+      // flag for next update frame to resize canvas without full re-init.
       _targetH = newH;
       _resizing = true;
     } else {
