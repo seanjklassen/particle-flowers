@@ -671,28 +671,25 @@ setup();
 if (!IS_MOBILE) {
   const trailCanvas = document.getElementById('trail');
   const tCtx = trailCanvas.getContext('2d');
-  const TRAIL_FADE = 5000;    // ms to fully fade
-  const TRAIL_COLOR = [216, 158, 158]; // #D89E9E
+  const TRAIL_FADE = 2000;    // ms to fully fade
+  const TRAIL_BANDS = 8;      // group segments into opacity bands to avoid overlap dots
   const trail = [];            // {x, y, t}
   let trailRaf;
 
   function sizeTrail() {
     trailCanvas.width = window.innerWidth;
-    // Cover the full scrollable document, not just the viewport
     trailCanvas.height = Math.max(document.documentElement.scrollHeight, window.innerHeight);
   }
   sizeTrail();
   window.addEventListener('resize', sizeTrail);
 
   window.addEventListener('mousemove', e => {
-    // Store page coordinates so the trail scrolls with the document
     trail.push({ x: e.clientX, y: e.clientY + window.scrollY, t: performance.now() });
   });
 
   function drawTrail() {
     const now = performance.now();
 
-    // Prune expired points
     while (trail.length && now - trail[0].t > TRAIL_FADE) trail.shift();
 
     tCtx.clearRect(0, 0, trailCanvas.width, trailCanvas.height);
@@ -706,21 +703,32 @@ if (!IS_MOBILE) {
     tCtx.lineCap = 'round';
     tCtx.lineJoin = 'round';
 
-    for (let i = 1; i < trail.length; i++) {
-      const p0 = trail[i - 1];
-      const p1 = trail[i];
-      const age = now - p1.t;
-      const alpha = Math.max(0, 1 - age / TRAIL_FADE);
-      if (alpha <= 0) continue;
-
-      // Skip segments where cursor jumped far (e.g. left and re-entered viewport)
-      const dx = p1.x - p0.x, dy = p1.y - p0.y;
-      if (dx * dx + dy * dy > 40000) continue;
+    // Group segments into opacity bands and draw each as a single continuous
+    // path — this prevents alpha compounding at segment overlaps (the dots).
+    for (let b = 0; b < TRAIL_BANDS; b++) {
+      const bandLo = b / TRAIL_BANDS;
+      const bandHi = (b + 1) / TRAIL_BANDS;
+      const bandAlpha = 1 - (bandLo + bandHi) * 0.5; // midpoint opacity
+      if (bandAlpha <= 0) continue;
 
       tCtx.beginPath();
-      tCtx.moveTo(p0.x, p0.y);
-      tCtx.lineTo(p1.x, p1.y);
-      tCtx.strokeStyle = `rgba(${TRAIL_COLOR[0]},${TRAIL_COLOR[1]},${TRAIL_COLOR[2]},${alpha.toFixed(3)})`;
+      let drawing = false;
+
+      for (let i = 1; i < trail.length; i++) {
+        const p0 = trail[i - 1];
+        const p1 = trail[i];
+        const age = now - p1.t;
+        const frac = age / TRAIL_FADE; // 0 = newest, 1 = oldest
+        if (frac < bandLo || frac >= bandHi) { drawing = false; continue; }
+
+        const dx = p1.x - p0.x, dy = p1.y - p0.y;
+        if (dx * dx + dy * dy > 40000) { drawing = false; continue; }
+
+        if (!drawing) { tCtx.moveTo(p0.x, p0.y); drawing = true; }
+        tCtx.lineTo(p1.x, p1.y);
+      }
+
+      tCtx.strokeStyle = `rgba(216,158,158,${bandAlpha.toFixed(3)})`;
       tCtx.stroke();
     }
 
