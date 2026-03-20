@@ -31,6 +31,7 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { background: #0a0909; }
     #c { display: block; position: fixed; top: 0; left: 0; z-index: 1; }
+    #trail { display: block; position: fixed; top: 0; left: 0; z-index: 2; pointer-events: none; }
 
     /* Spacer: pushes the page tall enough for the particle scatter, then text follows */
     #spacer { height: 96vh; }
@@ -140,6 +141,7 @@
 <body>
 
 <canvas id="c"></canvas>
+<canvas id="trail"></canvas>
 
 <header id="grid-header">
   <div class="col-name">Sean Joseph Klassen</div>
@@ -664,6 +666,63 @@ window.addEventListener('resize', () => {
 });
 
 setup();
+
+// ─── Cursor trail (desktop only) ────────────────────────────────────────────
+if (!IS_MOBILE) {
+  const trailCanvas = document.getElementById('trail');
+  const tCtx = trailCanvas.getContext('2d');
+  const TRAIL_FADE = 5000;    // ms to fully fade
+  const TRAIL_COLOR = [216, 158, 158]; // #D89E9E
+  const trail = [];            // {x, y, t}
+  let trailRaf;
+
+  function sizeTrail() {
+    trailCanvas.width = window.innerWidth;
+    trailCanvas.height = window.innerHeight;
+  }
+  sizeTrail();
+  window.addEventListener('resize', sizeTrail);
+
+  window.addEventListener('mousemove', e => {
+    trail.push({ x: e.clientX, y: e.clientY, t: performance.now() });
+  });
+
+  function drawTrail() {
+    const now = performance.now();
+
+    // Prune expired points
+    while (trail.length && now - trail[0].t > TRAIL_FADE) trail.shift();
+
+    tCtx.clearRect(0, 0, trailCanvas.width, trailCanvas.height);
+
+    if (trail.length < 2) {
+      trailRaf = requestAnimationFrame(drawTrail);
+      return;
+    }
+
+    for (let i = 1; i < trail.length; i++) {
+      const p0 = trail[i - 1];
+      const p1 = trail[i];
+      const age = now - p1.t;
+      const alpha = Math.max(0, 1 - age / TRAIL_FADE);
+      if (alpha <= 0) continue;
+
+      // Skip segments where cursor jumped far (e.g. left and re-entered viewport)
+      const dx = p1.x - p0.x, dy = p1.y - p0.y;
+      if (dx * dx + dy * dy > 40000) continue;
+
+      tCtx.beginPath();
+      tCtx.moveTo(p0.x, p0.y);
+      tCtx.lineTo(p1.x, p1.y);
+      tCtx.strokeStyle = `rgba(${TRAIL_COLOR[0]},${TRAIL_COLOR[1]},${TRAIL_COLOR[2]},${alpha.toFixed(3)})`;
+      tCtx.lineWidth = 1;
+      tCtx.stroke();
+    }
+
+    trailRaf = requestAnimationFrame(drawTrail);
+  }
+  trailRaf = requestAnimationFrame(drawTrail);
+}
 </script>
 </body>
 </html>
