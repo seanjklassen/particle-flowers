@@ -369,6 +369,7 @@ async function setup() {
     W = window.innerWidth;
     H = window.innerHeight;
     _prevW = W;
+    _targetH = H;
     canvasEl.width = W; canvasEl.height = H;
     sMx = iMx = W * 0.5;
     sMy = iMy = H * 0.5;
@@ -417,6 +418,23 @@ function update(t) {
   const clampedPY = rawPY >  MAX_PARA ?  MAX_PARA : rawPY < -MAX_PARA ? -MAX_PARA : rawPY;
   curPXo = clampedPX * breathScale * introFade;
   curPYo = clampedPY * breathScale * introFade;
+
+  // ── Smooth height lerp for mobile address bar changes ─────────────────────
+  if (_resizing && Math.abs(H - _targetH) > 1) {
+    const oldH = H;
+    H += (_targetH - H) * 0.12;
+    if (Math.abs(H - _targetH) < 1) H = _targetH;
+    const scaleY = H / oldH;
+    canvasEl.height = H | 0;
+    initBuffers();
+    for (let i = 0; i < count; i++) {
+      hy[i] *= scaleY;
+      py[i] *= scaleY;
+      scatterOffY[i] *= scaleY;
+    }
+  } else if (_resizing) {
+    _resizing = false;
+  }
 
   // ── Scroll / scatter state ─────────────────────────────────────────────────
   // Drive scatter from native scrollY — no wheel hijacking needed.
@@ -589,6 +607,25 @@ window.addEventListener('mousemove', e => {
   _mouseMovedAt = performance.now();
 });
 
+// ── Gyroscope parallax on mobile (easter egg) ──────────────────────────────
+// DeviceOrientationEvent works without permission on Android and older iOS.
+// On iOS 13+ it requires requestPermission() — we skip those to avoid prompts.
+if (IS_MOBILE && window.DeviceOrientationEvent) {
+  const needsPermission = typeof DeviceOrientationEvent.requestPermission === 'function';
+  if (!needsPermission) {
+    window.addEventListener('deviceorientation', e => {
+      if (e.gamma == null || e.beta == null) return;
+      // gamma: left/right tilt (-90…90), beta: front/back tilt (-180…180)
+      // Map tilt to a virtual cursor position centered on viewport
+      const tiltX = Math.max(-30, Math.min(30, e.gamma)) / 30; // -1…1
+      const tiltY = Math.max(-30, Math.min(30, e.beta - 45)) / 30; // -1…1 (45° is natural hold angle)
+      rawMx = W * 0.5 + tiltX * W * 0.5;
+      rawMy = H * 0.5 + tiltY * H * 0.5;
+      _mouseMovedAt = performance.now();
+    }, { passive: true });
+  }
+}
+
 // Cache scrollY via passive listener — avoids layout read inside rAF.
 // On mobile, rAF is paused during momentum scrolling (iOS Safari).
 // We force an update+render from the scroll listener to prevent the
@@ -613,6 +650,8 @@ window.addEventListener('scroll', () => {
 
 let resizeTimer;
 let _prevW = 0; // track width to distinguish real resize from mobile address bar
+let _targetH = 0; // lerp target for smooth height transitions
+let _resizing = false;
 window.addEventListener('resize', () => {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
@@ -620,16 +659,9 @@ window.addEventListener('resize', () => {
     const newH = window.innerHeight;
     if (newW === _prevW && count > 0) {
       // Height-only change (mobile address bar show/hide) —
-      // rescale positions proportionally, rebuild pixel buffers, no re-sample.
-      const scaleY = newH / H;
-      H = newH;
-      canvasEl.height = H;
-      initBuffers();
-      for (let i = 0; i < count; i++) {
-        hy[i] *= scaleY;
-        py[i] *= scaleY;
-        scatterOffY[i] *= scaleY;
-      }
+      // set target height and lerp toward it in the update loop.
+      _targetH = newH;
+      _resizing = true;
     } else {
       // Width changed — full re-setup (orientation change, real resize)
       _prevW = newW;
