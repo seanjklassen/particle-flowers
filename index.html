@@ -172,7 +172,7 @@
 <script>
 // ─── Config ───────────────────────────────────────────────────────────────────
 const IS_MOBILE  = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-const MAX_N      = IS_MOBILE ? 20000 : 80000;
+const MAX_N      = IS_MOBILE ? 30000 : 100000;
 const SPRING     = 0.08;
 const DAMP       = 0.84;
 const PARALLAX   = 0.055;
@@ -368,6 +368,7 @@ async function setup() {
     const img    = await loadBestSource();
     W = window.innerWidth;
     H = window.innerHeight;
+    _prevW = W;
     canvasEl.width = W; canvasEl.height = H;
     sMx = iMx = W * 0.5;
     sMy = iMy = H * 0.5;
@@ -611,9 +612,30 @@ window.addEventListener('scroll', () => {
 }, { passive: true });
 
 let resizeTimer;
+let _prevW = 0; // track width to distinguish real resize from mobile address bar
 window.addEventListener('resize', () => {
   clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => { setup(); }, 200);
+  resizeTimer = setTimeout(() => {
+    const newW = window.innerWidth;
+    const newH = window.innerHeight;
+    if (newW === _prevW && count > 0) {
+      // Height-only change (mobile address bar show/hide) —
+      // rescale positions proportionally, rebuild pixel buffers, no re-sample.
+      const scaleY = newH / H;
+      H = newH;
+      canvasEl.height = H;
+      initBuffers();
+      for (let i = 0; i < count; i++) {
+        hy[i] *= scaleY;
+        py[i] *= scaleY;
+        scatterOffY[i] *= scaleY;
+      }
+    } else {
+      // Width changed — full re-setup (orientation change, real resize)
+      _prevW = newW;
+      setup();
+    }
+  }, 200);
 });
 
 setup();
