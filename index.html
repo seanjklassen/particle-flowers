@@ -6,15 +6,24 @@
   <title>Sean Joseph Klassen — Designer and Musician</title>
   <meta name="description" content="Sean Joseph Klassen is a designer and musician obsessed with form, function, and feeling.">
   <meta name="theme-color" content="#0a0909">
+  <link rel="canonical" href="https://seanjklassen.com/">
 
   <!-- Open Graph -->
-  <meta property="og:title" content="Sean Joseph Klassen — Designer">
+  <meta property="og:title" content="Sean Joseph Klassen — Designer and Musician">
   <meta property="og:description" content="Designer and musician obsessed with form, function, and feeling.">
   <meta property="og:type" content="website">
-  <meta property="og:image" content="source.jpg">
+  <meta property="og:url" content="https://seanjklassen.com/">
+  <meta property="og:image" content="https://seanjklassen.com/source.jpg">
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Sean Joseph Klassen — Designer and Musician">
+  <meta name="twitter:description" content="Designer and musician obsessed with form, function, and feeling.">
+  <meta name="twitter:image" content="https://seanjklassen.com/source.jpg">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="apple-touch-icon" href="favicon.png">
 
   <!-- Preload fonts actually used -->
   <link rel="preload" href="assets/maison-neue-light.ttf" as="font" type="font/ttf" crossorigin>
@@ -85,6 +94,10 @@
       will-change: transform, opacity;
     }
     #grid-header .col-name {
+      font-size: inherit;
+      font-weight: inherit;
+      line-height: inherit;
+      margin: 0;
     }
     #grid-header .col {
       display: flex;
@@ -138,18 +151,17 @@
 </head>
 <body>
 
-<canvas id="c"></canvas>
-<canvas id="trail"></canvas>
+<canvas id="c" aria-hidden="true"></canvas>
+<canvas id="trail" aria-hidden="true"></canvas>
 
 <header id="grid-header">
-  <div class="col-name">Sean Joseph Klassen</div>
+  <h1 class="col-name">Sean Joseph Klassen</h1>
 
   <div class="col">
     <div class="col-label">Experience</div>
     <div class="col-entry">Mercury<br>2023–2026</div>
     <div class="col-entry">Instrument<br>2016–2023</div>
     <div class="col-entry">Legwork<br>2007–2016</div>
-    <div class="col-entry">Agencies &amp; Startups<br>2003–2007</div>
   </div>
 
   <div class="col">
@@ -173,6 +185,7 @@
 <script>
 // ─── Config ───────────────────────────────────────────────────────────────────
 const IS_MOBILE  = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const MAX_N      = IS_MOBILE ? 30000 : 100000;
 const SPRING     = 0.08;
 const DAMP       = 0.84;
@@ -340,10 +353,21 @@ function sample(imgPixels, srcW, srcH) {
     scatterOffY[i] = -(H * 0.8 + Math.random() * H * 1.2) * (0.45 + d * 0.75);
   }
 
-  introFrame = 0;
-  introDone  = false;
-  introFade  = 0;
-  console.log(`${count} particles (pool ${pN})`);
+  if (REDUCED_MOTION) {
+    // Respect reduced-motion: skip the staggered intro, snap particles home.
+    for (let i = 0; i < count; i++) {
+      px[i] = hx[i]; py[i] = hy[i];
+      vx[i] = vy[i] = 0;
+      launched[i] = 1;
+    }
+    introFrame = MAX_DELAY + 200;
+    introDone  = true;
+    introFade  = 1;
+  } else {
+    introFrame = 0;
+    introDone  = false;
+    introFade  = 0;
+  }
 }
 
 // ─── Image load ───────────────────────────────────────────────────────────────
